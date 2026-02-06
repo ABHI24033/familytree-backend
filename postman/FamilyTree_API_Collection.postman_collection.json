@@ -1,0 +1,1202 @@
+{
+	"info": {
+		"_postman_id": "familytree-api-collection",
+		"name": "FamilyTree API Collection",
+		"description": "Complete API collection for FamilyTree application",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Registration Flow",
+			"item": [
+				{
+					"name": "1. Send OTP",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.otp) {",
+									"        pm.collectionVariables.set(\"otp\", jsonData.otp);",
+									"        console.log(\"OTP saved: \" + jsonData.otp);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"firstname\": \"Vipul\",\n    \"lastname\": \"Chandan\",\n    \"country_code\": \"+91\",\n    \"phone\": \"9876543210\",\n    \"password\": \"Password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/send-otp",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"send-otp"
+							]
+						},
+						"description": "Send OTP for registration. Creates a new user or updates existing unverified user. Password is required and will be validated (min 8 characters, at least one letter and one number) and encrypted using bcrypt before storage."
+					},
+					"response": []
+				},
+				{
+					"name": "2. Verify OTP",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.accessToken) {",
+									"        pm.collectionVariables.set(\"accessToken\", jsonData.accessToken);",
+									"        console.log(\"Access Token saved\");",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"9876543210\",\n    \"otp\": \"{{otp}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/verify-otp",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"verify-otp"
+							]
+						},
+						"description": "Verify OTP and complete registration. Sets is_verified=true and generates JWT tokens. Password is already set during Send OTP step, so no separate password setup is needed."
+					},
+					"response": []
+				},
+				{
+					"name": "3. Resend OTP",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.otp) {",
+									"        pm.collectionVariables.set(\"otp\", jsonData.otp);",
+									"        console.log(\"New OTP saved: \" + jsonData.otp);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"9876543210\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/resend-otp",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"resend-otp"
+							]
+						},
+						"description": "Resend OTP for unverified users."
+					},
+					"response": []
+				},
+				{
+					"name": "4. Set Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"9876543210\",\n    \"password\": \"Password123\",\n    \"confirm_password\": \"Password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/set-password",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"set-password"
+							]
+						},
+						"description": "Set password for existing users who don't have a password set. For new registrations, password is set during Send OTP step. Password must be at least 8 characters with at least one letter and one number."
+					},
+					"response": []
+				}
+			],
+			"description": "Complete registration flow: Send OTP (with password) → Verify OTP. Password is validated, encrypted, and stored during Send OTP step. Set Password endpoint is only needed for existing users without passwords."
+		},
+		{
+			"name": "Login Flow",
+			"item": [
+				{
+					"name": "1. Send OTP for Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.otp) {",
+									"        pm.collectionVariables.set(\"loginOtp\", jsonData.otp);",
+									"        console.log(\"Login OTP saved: \" + jsonData.otp);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"9876543210\",\n    \"password\": \"Password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login/send-otp",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login",
+								"send-otp"
+							]
+						},
+						"description": "Send OTP for login. Requires phone and password verification first."
+					},
+					"response": []
+				},
+				{
+					"name": "2. Verify OTP for Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.accessToken) {",
+									"        pm.collectionVariables.set(\"accessToken\", jsonData.accessToken);",
+									"        console.log(\"Access Token saved\");",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"9876543210\",\n    \"otp\": \"{{loginOtp}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login/verify-otp",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login",
+								"verify-otp"
+							]
+						},
+						"description": "Verify OTP and complete login. Generates JWT tokens."
+					},
+					"response": []
+				},
+				{
+					"name": "3. Resend OTP for Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.otp) {",
+									"        pm.collectionVariables.set(\"loginOtp\", jsonData.otp);",
+									"        console.log(\"New Login OTP saved: \" + jsonData.otp);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"9876543210\",\n    \"password\": \"Password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login/resend-otp",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login",
+								"resend-otp"
+							]
+						},
+						"description": "Resend OTP for login. Requires phone and password verification."
+					},
+					"response": []
+				}
+			],
+			"description": "Login flow: Send OTP (with password) → Verify OTP → Login"
+		},
+		{
+			"name": "Forgot Password Flow",
+			"item": [
+				{
+					"name": "1. Send OTP for Forgot Password",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.otp) {",
+									"        pm.collectionVariables.set(\"resetOtp\", jsonData.otp);",
+									"        console.log(\"Reset OTP saved: \" + jsonData.otp);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"9876543210\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/forgot-password/send-otp",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"forgot-password",
+								"send-otp"
+							]
+						},
+						"description": "Send OTP for password reset. User must be verified and have a password set."
+					},
+					"response": []
+				},
+				{
+					"name": "2. Verify OTP for Forgot Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"9876543210\",\n    \"otp\": \"{{resetOtp}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/forgot-password/verify-otp",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"forgot-password",
+								"verify-otp"
+							]
+						},
+						"description": "Verify OTP for password reset. OTP remains active until password is reset."
+					},
+					"response": []
+				},
+				{
+					"name": "3. Reset Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"9876543210\",\n    \"otp\": \"{{resetOtp}}\",\n    \"password\": \"NewPassword123\",\n    \"confirm_password\": \"NewPassword123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/forgot-password/reset",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"forgot-password",
+								"reset"
+							]
+						},
+						"description": "Reset password after OTP verification. Requires phone, OTP, new password, and confirm_password."
+					},
+					"response": []
+				}
+			],
+			"description": "Forgot password flow: Send OTP → Verify OTP → Reset Password"
+		},
+		{
+			"name": "Session Management",
+			"item": [
+				{
+					"name": "Get Current User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/auth/me",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"me"
+							]
+						},
+						"description": "Get current authenticated user information including user details, hasPassword status, hasProfile status, and profilePicture URL if profile exists."
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.accessToken) {",
+									"        pm.collectionVariables.set(\"accessToken\", jsonData.accessToken);",
+									"        console.log(\"Access Token refreshed\");",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/refresh",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"refresh"
+							]
+						},
+						"description": "Refresh access token using refresh token from cookies."
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/logout",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"logout"
+							]
+						},
+						"description": "Logout user and clear authentication cookies."
+					},
+					"response": []
+				}
+			],
+			"description": "Session management endpoints"
+		},
+		{
+			"name": "Profile Management",
+			"item": [
+				{
+					"name": "1. Create Profile",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "gender",
+									"value": "male",
+									"type": "text",
+									"description": "Required: male, female, or other"
+								},
+								{
+									"key": "profilePicture",
+									"value": "https://example.com/profile.jpg",
+									"type": "text",
+									"description": "Required: Profile picture URL or path"
+								},
+								{
+									"key": "age",
+									"value": "25",
+									"type": "text",
+									"description": "Required: Number between 0-120"
+								},
+								{
+									"key": "prefix",
+									"value": "Mr.",
+									"type": "text",
+									"description": "Optional: Mr., Mrs., Miss, Ms., Dr., Prof., Rev., Fr., Sr."
+								},
+								{
+									"key": "dob",
+									"value": "1999-01-15",
+									"type": "text",
+									"description": "Optional: Date of birth (YYYY-MM-DD)"
+								},
+								{
+									"key": "dateOfDeath",
+									"value": "",
+									"type": "text",
+									"description": "Optional: Date of death (YYYY-MM-DD)"
+								},
+								{
+									"key": "birthPlace",
+									"value": "Mumbai",
+									"type": "text"
+								},
+								{
+									"key": "deathPlace",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "address",
+									"value": "123 Main Street",
+									"type": "text"
+								},
+								{
+									"key": "city",
+									"value": "Mumbai",
+									"type": "text"
+								},
+								{
+									"key": "state",
+									"value": "Maharashtra",
+									"type": "text"
+								},
+								{
+									"key": "country",
+									"value": "India",
+									"type": "text"
+								},
+								{
+									"key": "postalCode",
+									"value": "400001",
+									"type": "text",
+									"description": "Optional: 5 or 6 digits"
+								},
+								{
+									"key": "whatsappNo",
+									"value": "9876543210",
+									"type": "text",
+									"description": "Optional: 10-digit WhatsApp number"
+								},
+								{
+									"key": "email",
+									"value": "user@example.com",
+									"type": "text",
+									"description": "Optional: Valid email address"
+								},
+								{
+									"key": "marital_status",
+									"value": "single",
+									"type": "text",
+									"description": "Optional: single, married, divorced, widowed, separated"
+								},
+								{
+									"key": "marriageDate",
+									"value": "",
+									"type": "text",
+									"description": "Optional: Marriage date (YYYY-MM-DD)"
+								},
+								{
+									"key": "partners",
+									"value": "",
+									"type": "text",
+									"description": "Optional: Comma-separated User IDs (e.g., USER_ID_1,USER_ID_2)"
+								},
+								{
+									"key": "occupation",
+									"value": "Software Engineer",
+									"type": "text"
+								},
+								{
+									"key": "jobType",
+									"value": "full-time",
+									"type": "text",
+									"description": "Optional: full-time, part-time, contract, freelance, self-employed, unemployed, student, retired"
+								},
+								{
+									"key": "department",
+									"value": "Engineering",
+									"type": "text"
+								},
+								{
+									"key": "designation",
+									"value": "Senior Developer",
+									"type": "text"
+								},
+								{
+									"key": "jobStatus",
+									"value": "active",
+									"type": "text",
+									"description": "Optional: active, retired, house-wife, house-husband, unemployed"
+								},
+								{
+									"key": "qualification",
+									"value": "graduation",
+									"type": "text",
+									"description": "Optional: 10th, 12th, diploma, graduation, post-graduation, phd, other"
+								},
+								{
+									"key": "educationDetails_degree",
+									"value": "B.Tech",
+									"type": "text",
+									"description": "Optional: Degree name"
+								},
+								{
+									"key": "educationDetails_institution",
+									"value": "University Name",
+									"type": "text",
+									"description": "Optional: Institution name"
+								},
+								{
+									"key": "educationDetails_yearOfCompletion",
+									"value": "2021",
+									"type": "text",
+									"description": "Optional: Year of completion (number)"
+								},
+								{
+									"key": "foodPreference",
+									"value": "veg",
+									"type": "text",
+									"description": "Optional: veg, non-veg, both, vegan, jain"
+								},
+								{
+									"key": "bloodGroup",
+									"value": "O+",
+									"type": "text",
+									"description": "Optional: A+, A-, B+, B-, O+, O-, AB+, AB-, Unknown"
+								},
+								{
+									"key": "religion",
+									"value": "Hindu",
+									"type": "text"
+								},
+								{
+									"key": "lifeHistory",
+									"value": "",
+									"type": "text",
+									"description": "Optional: Biography (max 500 characters)"
+								},
+								{
+									"key": "parish",
+									"value": "St. Mary's Parish",
+									"type": "text"
+								},
+								{
+									"key": "church",
+									"value": "St. Mary's Church",
+									"type": "text"
+								},
+								{
+									"key": "parishPriest",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "parishCoordinator",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "parishContact",
+									"value": "",
+									"type": "text",
+									"description": "Optional: 10-digit contact number"
+								},
+								{
+									"key": "father",
+									"value": "",
+									"type": "text",
+									"description": "Optional: User ID of father"
+								},
+								{
+									"key": "mother",
+									"value": "",
+									"type": "text",
+									"description": "Optional: User ID of mother"
+								},
+								{
+									"key": "brothers",
+									"value": "",
+									"type": "text",
+									"description": "Optional: Comma-separated User IDs (e.g., USER_ID_1,USER_ID_2)"
+								},
+								{
+									"key": "sisters",
+									"value": "",
+									"type": "text",
+									"description": "Optional: Comma-separated User IDs (e.g., USER_ID_1,USER_ID_2)"
+								},
+								{
+									"key": "sons",
+									"value": "",
+									"type": "text",
+									"description": "Optional: Comma-separated User IDs (e.g., USER_ID_1,USER_ID_2)"
+								},
+								{
+									"key": "daughters",
+									"value": "",
+									"type": "text",
+									"description": "Optional: Comma-separated User IDs (e.g., USER_ID_1,USER_ID_2)"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/profile/create",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"profile",
+								"create"
+							]
+						},
+						"description": "Create a new profile for the authenticated user. Requires gender, profilePicture, and age as mandatory fields. All other fields are optional."
+					},
+					"response": []
+				},
+				{
+					"name": "2. Get Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/profile/me",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"profile",
+								"me"
+							]
+						},
+						"description": "Get the authenticated user's profile with all populated family relationships (father, mother, brothers, sisters, sons, daughters, partners)."
+					},
+					"response": []
+				},
+				{
+					"name": "3. Update Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "firstname",
+									"value": "",
+									"type": "text",
+									"description": "Optional: Update user's first name (will update User model)"
+								},
+								{
+									"key": "lastname",
+									"value": "",
+									"type": "text",
+									"description": "Optional: Update user's last name (will update User model)"
+								},
+								{
+									"key": "gender",
+									"value": "",
+									"type": "text",
+									"description": "Optional: male, female, or other"
+								},
+								{
+									"key": "profilePicture",
+									"value": "",
+									"type": "text",
+									"description": "Optional: Profile picture URL or path"
+								},
+								{
+									"key": "age",
+									"value": "26",
+									"type": "text",
+									"description": "Optional: Number between 0-120"
+								},
+								{
+									"key": "prefix",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "dob",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "dateOfDeath",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "birthPlace",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "deathPlace",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "address",
+									"value": "456 New Street",
+									"type": "text"
+								},
+								{
+									"key": "city",
+									"value": "Delhi",
+									"type": "text"
+								},
+								{
+									"key": "state",
+									"value": "Delhi",
+									"type": "text"
+								},
+								{
+									"key": "country",
+									"value": "India",
+									"type": "text"
+								},
+								{
+									"key": "postalCode",
+									"value": "110001",
+									"type": "text"
+								},
+								{
+									"key": "whatsappNo",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "email",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "marital_status",
+									"value": "married",
+									"type": "text"
+								},
+								{
+									"key": "marriageDate",
+									"value": "2024-01-15",
+									"type": "text"
+								},
+								{
+									"key": "partners",
+									"value": "",
+									"type": "text",
+									"description": "Comma-separated User IDs"
+								},
+								{
+									"key": "occupation",
+									"value": "Senior Software Engineer",
+									"type": "text"
+								},
+								{
+									"key": "jobType",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "department",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "designation",
+									"value": "Tech Lead",
+									"type": "text"
+								},
+								{
+									"key": "jobStatus",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "qualification",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "educationDetails_degree",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "educationDetails_institution",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "educationDetails_yearOfCompletion",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "foodPreference",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "bloodGroup",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "religion",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "lifeHistory",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "parish",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "church",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "parishPriest",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "parishCoordinator",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "parishContact",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "father",
+									"value": "",
+									"type": "text",
+									"description": "User ID of father"
+								},
+								{
+									"key": "mother",
+									"value": "",
+									"type": "text",
+									"description": "User ID of mother"
+								},
+								{
+									"key": "brothers",
+									"value": "",
+									"type": "text",
+									"description": "Comma-separated User IDs (e.g., USER_ID_1,USER_ID_2)"
+								},
+								{
+									"key": "sisters",
+									"value": "",
+									"type": "text",
+									"description": "Comma-separated User IDs"
+								},
+								{
+									"key": "sons",
+									"value": "",
+									"type": "text",
+									"description": "Comma-separated User IDs"
+								},
+								{
+									"key": "daughters",
+									"value": "",
+									"type": "text",
+									"description": "Comma-separated User IDs"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/profile/update",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"profile",
+								"update"
+							]
+						},
+						"description": "Update the authenticated user's profile. You can update any field including firstname and lastname (which will update the User model). Family relationships (father, mother, brothers, sisters, sons, daughters, partners) should contain User IDs. If updating required fields (gender, profilePicture, age), they will be validated. Response includes updated user information with firstname, lastname, phone, and country_code."
+					},
+					"response": []
+				}
+			],
+			"description": "Profile management endpoints: Create, Get, and Update user profiles"
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "otp",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "loginOtp",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "resetOtp",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "accessToken",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
+
