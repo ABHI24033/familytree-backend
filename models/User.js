@@ -103,7 +103,17 @@ const userSchema = new Schema(
       razorpaySubscriptionId: {
         type: String
       }
-    }
+    },
+    // Family Sharing fields
+    primary_account_id: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null
+    },
+    family_members: [{
+      type: Schema.Types.ObjectId,
+      ref: "User"
+    }]
   },
   {
     timestamps: true

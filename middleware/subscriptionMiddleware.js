@@ -11,24 +11,34 @@ export const checkSubscriptionAccess = async (req, res, next) => {
             return res.status(401).json({ success: false, message: "User not found" });
         }
 
-        // 1. Check if user is on active Pro plan
-        const isProActive = user.subscription &&
-            user.subscription.plan === 'pro' &&
-            user.subscription.status === 'active' &&
-            new Date(user.subscription.expiryDate) > new Date();
+        // Helper to check trial access (150 days / 5 months)
+        const hasValidTrial = (userToCheck) => {
+            const trialEnd = new Date(userToCheck.createdAt);
+            trialEnd.setDate(trialEnd.getDate() + 150);
+            return trialEnd > new Date();
+        };
 
-        if (isProActive) {
-            return next(); // Reference to next middleware
+        // Helper to check pro subscription access
+        const hasActivePro = (userToCheck) => {
+            return userToCheck.subscription &&
+                userToCheck.subscription.plan === 'pro' &&
+                userToCheck.subscription.status === 'active' &&
+                new Date(userToCheck.subscription.expiryDate) > new Date();
+        };
+
+        // 1. Check if direct user has active Pro or Trial
+        if (hasActivePro(user) || hasValidTrial(user)) {
+            return next(); // Direct access granted
         }
 
-        // 2. Check if user is within Free Trial (3 months)
-        const threeMonthsAgo = new Date();
-        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-        const createdAt = new Date(user.createdAt);
-
-        if (createdAt > threeMonthsAgo) {
-            // if (createdAt > new Date()) {
-            return next(); // Still in free trial
+        // 2. Check if user inherits from a primary account
+        if (user.primary_account_id) {
+            const primaryUser = await User.findById(user.primary_account_id);
+            if (primaryUser) {
+                if (hasActivePro(primaryUser) || hasValidTrial(primaryUser)) {
+                    return next(); // Inherited access granted
+                }
+            }
         }
 
         // 3. Block access

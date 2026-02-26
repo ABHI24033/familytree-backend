@@ -18,7 +18,7 @@ export const createSubscriptionOrder = async (req, res) => {
     try {
         const instance = getRazorpayInstance();
         const options = {
-            amount: 169900, // amount in the smallest currency unit (1699 INR * 100 paise)
+            amount: 69900, // amount in the smallest currency unit (699 INR * 100 paise)
             currency: "INR",
             receipt: `receipt_order_${Date.now()}`,
             notes: {
@@ -65,9 +65,9 @@ export const selectSubscription = async (req, res) => {
         }
 
         if (plan === 'free') {
-            // Set expiry to 90 days (3 months) from now
+            // Set expiry to 150 days (5 months) from now
             const expiryDate = new Date();
-            expiryDate.setDate(expiryDate.getDate() + 90);
+            expiryDate.setDate(expiryDate.getDate() + 150);
 
             user.subscription = {
                 plan: 'free',
@@ -178,15 +178,35 @@ export const getSubscriptionStatus = async (req, res) => {
             return res.status(404).json({ success: false, message: "User not found" });
         }
 
-        // Check if trial is expired
-        const threeMonthsAgo = new Date();
-        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-        const isTrialExpired = new Date(user.createdAt) < threeMonthsAgo;
+        // Check if trial is expired (150 days)
+        const expiryThreshold = new Date();
+        expiryThreshold.setDate(expiryThreshold.getDate() - 150);
+        let isTrialExpired = new Date(user.createdAt) < expiryThreshold;
 
         // Check if pro plan is active
-        const isProActive = user.subscription.plan === 'pro' &&
+        let isProActive = user.subscription.plan === 'pro' &&
             user.subscription.status === 'active' &&
             new Date(user.subscription.expiryDate) > new Date();
+
+        // Check Inherited Access
+        if (!isProActive && user.primary_account_id) {
+            const primaryUser = await User.findById(user.primary_account_id);
+            if (primaryUser) {
+                const primaryIsPro = primaryUser.subscription &&
+                    primaryUser.subscription.plan === 'pro' &&
+                    primaryUser.subscription.status === 'active' &&
+                    new Date(primaryUser.subscription.expiryDate) > new Date();
+
+                const primaryTrialEnd = new Date(primaryUser.createdAt);
+                primaryTrialEnd.setDate(primaryTrialEnd.getDate() + 150);
+                const primaryHasTrial = primaryTrialEnd > new Date();
+
+                if (primaryIsPro || primaryHasTrial) {
+                    isProActive = primaryIsPro; // Treat as pro if primary is pro
+                    isTrialExpired = false; // Override expired trial if inherited
+                }
+            }
+        }
 
         // If pro plan expired, update status
         if (user.subscription.plan === 'pro' && !isProActive && user.subscription.status === 'active') {
@@ -206,5 +226,79 @@ export const getSubscriptionStatus = async (req, res) => {
     } catch (error) {
         console.error("Get Status Error:", error);
         res.status(500).json({ success: false, message: "Server error" });
+    }
+};
+
+// ---------------- FAMILY MANAGMENT ---------------- //
+
+export const getFamilyMembers = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id).populate('family_members', 'firstname lastname phone is_verified status');
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+        res.status(200).json({
+            success: true,
+            family_members: user.family_members || []
+        });
+    } catch (error) {
+        console.error("Get Family Error:", error);
+        res.status(500).json({ success: false, message: "Server error fetching family members" });
+    }
+};
+
+export const addFamilyMember = async (req, res) => {
+    try {
+        const { phone } = req.body; // or email, but currently system authenticates primarily via phone
+        const primaryUserId = req.user.id;
+
+        if (!phone) {
+            return res.status(400).json({ success: false, message: "Phone number is required." });
+        }
+
+        const primaryUser = await User.findById(primaryUserId);
+
+        // Find target user
+        const targetUser = await User.findOne({ phone, is_deleted: false });
+
+        if (!targetUser) {
+            return res.status(404).json({ success: false, message: "User not found. They must sign up first." });
+        }
+
+        if (targetUser._id.toString() === primaryUserId) {
+            return res.status(400).json({ success: false, message: "You cannot add yourself to your family." });
+        }
+
+        if (targetUser.primary_account_id) {
+            return res.status(400).json({ success: false, message: "This user is already part of a family plan." });
+        }
+
+        // Add to family
+        targetUser.primary_account_id = primaryUserId;
+        await targetUser.save();
+
+        if (!primaryUser.family_members) {
+            primaryUser.family_members = [];
+        }
+
+        // Ensure not duplicate
+        if (!primaryUser.family_members.includes(targetUser._id)) {
+            primaryUser.family_members.push(targetUser._id);
+            await primaryUser.save();
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Family member added successfully",
+            targetUser: {
+                id: targetUser._id,
+                firstname: targetUser.firstname,
+                lastname: targetUser.lastname,
+                phone: targetUser.phone
+            }
+        });
+    } catch (error) {
+        console.error("Add Family Member Error:", error);
+        res.status(500).json({ success: false, message: "Server error linking family member" });
     }
 };

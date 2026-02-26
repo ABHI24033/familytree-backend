@@ -70,6 +70,7 @@ export const formatUserResponse = (user) => {
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
     subscription: user.subscription,
+    primary_account_id: user.primary_account_id,
     ...(user.status && { status: user.status })
   };
 };
