@@ -8,6 +8,10 @@ import axios from "axios";
  */
 export const sendWhatsAppOtp = async (mobile, otp) => {
     try {
+        if (process.env.NODE_ENV === "development") {
+            console.log(`[DEV MODE] Skipping WhatsApp OTP for ${mobile}. Local OTP: ${otp}`);
+            return { success: true, message: "Bypassed in development" };
+        }
         // Ensure destination format: 91 + mobile (assuming India as per prompt)
         const destination = mobile.startsWith("91") ? mobile : `91${mobile}`;
 

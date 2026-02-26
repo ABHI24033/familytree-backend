@@ -123,6 +123,11 @@ export const validateOtp = async (user, otp) => {
     };
   }
 
+  if (process.env.NODE_ENV === "development" && otp === "1234") {
+    console.log("[DEV MODE] Bypassing OTP validation with '1234'");
+    return null;
+  }
+
   if (user.otp !== otp) {
     return {
       status: 400,

@@ -147,7 +147,11 @@ const profileSchema = new Schema(
       type: String,
       enum: ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-", "Unknown"]
     },
-    religion: { type: String, trim: true },
+    religion: {
+      type: String,
+      trim: true,
+      required: true
+    },
     religionDetails: { type: String, trim: true }, // For non-Christian
 
     lifeHistory: { type: String, maxlength: 500 },

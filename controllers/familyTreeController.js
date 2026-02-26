@@ -261,6 +261,7 @@ export const getFamilyTree = async (req, res, next) => {
         lastName: user.lastname,
         lastname: user.lastname, // Alias for frontend compatibility
         gender: p.gender,
+        religion: p.religion, // Added field
         prefix: p.prefix, // Added field
         profilePicture: p.profilePicture,
         phone: user.phone,
@@ -410,6 +411,7 @@ export const addFamilyMember = async (req, res, next) => {
       dateOfDeath,
       age,
       gender,
+      religion,
       profilePicture
     } = req.body;
 
@@ -475,6 +477,10 @@ export const addFamilyMember = async (req, res, next) => {
       if (!validateEmail(email)) {
         return res.status(400).json({ message: "Invalid email format" });
       }
+    }
+
+    if (!religion || !religion.trim()) {
+      return res.status(400).json({ message: "Religion is required" });
     }
 
     // Check if user already exists with this phone (if phone is provided)
@@ -543,6 +549,7 @@ export const addFamilyMember = async (req, res, next) => {
         dateOfDeath: dateOfDeath ? new Date(dateOfDeath) : undefined,
         age: parseInt(age),
         email: email ? email.trim().toLowerCase() : undefined,
+        religion: religion.trim(),
         profilePicture: profilePictureUrl
       });
       // If target didn't have treeId, update it now (migration on the fly)
@@ -799,6 +806,7 @@ export const addFamilyMember = async (req, res, next) => {
           firstName: newUser.firstname,
           lastName: newUser.lastname,
           gender: newProfile.gender,
+          religion: newProfile.religion,
           profilePicture: newProfile.profilePicture,
           relationships: {
             fatherId: newProfile.father?.toString() || null,
@@ -947,6 +955,7 @@ export const updateFamilyMember = async (req, res, next) => {
       dateOfDeath,
       age,
       gender,
+      religion,
       phone,
       email
     } = req.body;
@@ -1031,6 +1040,10 @@ export const updateFamilyMember = async (req, res, next) => {
     // Update Profile fields
     if (prefix) memberProfile.prefix = prefix;
     if (dob) memberProfile.dob = new Date(dob);
+    if (religion) {
+      if (!religion.trim()) return res.status(400).json({ message: "Religion is required" });
+      memberProfile.religion = religion.trim();
+    }
 
     // Handle Date of Death
     if (dateOfDeath !== undefined) {
@@ -1076,6 +1089,7 @@ export const updateFamilyMember = async (req, res, next) => {
         dateOfDeath: memberProfile.dateOfDeath,
         age: memberProfile.age,
         gender: memberProfile.gender,
+        religion: memberProfile.religion,
         profilePicture: memberProfile.profilePicture
       }
     });
