@@ -21,6 +21,7 @@ import personalDataRoutes from "./routes/personalDataRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import contactGroupRoutes from "./routes/contactGroupRoutes.js";
 import systemSettingRoutes from "./routes/systemSettingRoutes.js";
+import reportRoutes from "./routes/reportRoutes.js";
 import { initScheduler } from "./controllers/scheduler.js";
 import { initializeSettings } from "./controllers/systemSettingController.js";
 
@@ -124,6 +125,7 @@ app.use("/api/personal-data", personalDataRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/contact-groups", contactGroupRoutes);
 app.use("/api/settings", systemSettingRoutes);
+app.use("/api/reports", reportRoutes);
 
 // Error Handler
 app.use(errorHandler);

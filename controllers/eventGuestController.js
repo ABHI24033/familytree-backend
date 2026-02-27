@@ -12,38 +12,164 @@ export const getEventGuests = async (req, res) => {
         const search = req.query.search || "";
         const status = req.query.status || "";
 
+        // Advanced Filters
+        const {
+            ageMin, ageMax, gender, marital_status,
+            city, state, dobStart, dobEnd,
+            anniversaryStart, anniversaryEnd,
+            jobCategory, foodPreference, bloodGroup
+        } = req.query;
+
         const skip = (page - 1) * limit;
 
-        const query = { event: eventId };
+        // Base match for the event
+        const matchStage = { event: new mongoose.Types.ObjectId(eventId) };
 
+        // Basic Filters (Status & Search)
         if (status) {
-            query.status = status;
+            matchStage.status = status;
         } else {
-            query.status = { $ne: "pending" };
+            matchStage.status = { $ne: "pending" };
         }
 
-        if (req.query.city) {
-            query.city = req.query.city;
-        }
-
-        // Search logic
         if (search) {
-            query.$or = [
+            matchStage.$or = [
                 { name: { $regex: search, $options: "i" } },
                 { mobile: { $regex: search, $options: "i" } },
                 { city: { $regex: search, $options: "i" } }
             ];
         }
 
-        const total = await EventGuest.countDocuments(query);
-        const guests = await EventGuest.find(query)
-            .populate("user", "firstname lastname email avatar")
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(limit);
+        // Create Aggregation Pipeline
+        const pipeline = [
+            { $match: matchStage },
+            // Join with User
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "user",
+                    foreignField: "_id",
+                    as: "userData"
+                }
+            },
+            { $unwind: { path: "$userData", preserveNullAndEmptyArrays: true } },
+            // Join with Profile
+            {
+                $lookup: {
+                    from: "profiles",
+                    localField: "user",
+                    foreignField: "user",
+                    as: "profileData"
+                }
+            },
+            { $unwind: { path: "$profileData", preserveNullAndEmptyArrays: true } }
+        ];
 
-        // [NEW] Calculate Stats for the whole event (not just this page)
-        const allGuestsForStats = await EventGuest.find({ event: eventId });
+        // Apply Advanced Filters in a $match stage after lookups
+        const advancedMatch = {};
+
+        if (ageMin || ageMax) {
+            advancedMatch["profileData.age"] = {};
+            if (ageMin) advancedMatch["profileData.age"].$gte = parseInt(ageMin);
+            if (ageMax) advancedMatch["profileData.age"].$lte = parseInt(ageMax);
+        }
+
+        if (gender && gender.length) {
+            advancedMatch["profileData.gender"] = { $in: Array.isArray(gender) ? gender : [gender] };
+        }
+
+        if (marital_status && marital_status.length) {
+            advancedMatch["profileData.marital_status"] = { $in: Array.isArray(marital_status) ? marital_status : [marital_status] };
+        }
+
+        if (city && city.length) {
+            // Check both guest-entered city and profile city
+            advancedMatch.$or = [
+                { city: { $in: Array.isArray(city) ? city : [city] } },
+                { "profileData.city": { $in: Array.isArray(city) ? city : [city] } }
+            ];
+        }
+
+        if (state && state.length) {
+            advancedMatch["profileData.state"] = { $in: Array.isArray(state) ? state : [state] };
+        }
+
+        if (dobStart || dobEnd) {
+            advancedMatch["profileData.dob"] = {};
+            if (dobStart) advancedMatch["profileData.dob"].$gte = new Date(dobStart);
+            if (dobEnd) advancedMatch["profileData.dob"].$lte = new Date(dobEnd);
+        }
+
+        if (anniversaryStart || anniversaryEnd) {
+            advancedMatch["profileData.marriageDate"] = {};
+            if (anniversaryStart) advancedMatch["profileData.marriageDate"].$gte = new Date(anniversaryStart);
+            if (anniversaryEnd) advancedMatch["profileData.marriageDate"].$lte = new Date(anniversaryEnd);
+        }
+
+        if (jobCategory && jobCategory.length) {
+            advancedMatch["profileData.jobCategory"] = { $in: Array.isArray(jobCategory) ? jobCategory : [jobCategory] };
+        }
+
+        if (foodPreference && foodPreference.length) {
+            // This is preferred from EventGuest's own RSVP data
+            matchStage.foodPreference = { $in: Array.isArray(foodPreference) ? foodPreference : [foodPreference] };
+        }
+
+        if (bloodGroup && bloodGroup.length) {
+            advancedMatch["profileData.bloodGroup"] = { $in: Array.isArray(bloodGroup) ? bloodGroup : [bloodGroup] };
+        }
+
+        if (Object.keys(advancedMatch).length > 0) {
+            pipeline.push({ $match: advancedMatch });
+        }
+
+        // Count total matching documents
+        const countPipeline = [...pipeline, { $count: "total" }];
+        const countResult = await EventGuest.aggregate(countPipeline);
+        const total = countResult.length > 0 ? countResult[0].total : 0;
+
+        // Fetch paginated results
+        pipeline.push(
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: limit },
+            {
+                $project: {
+                    _id: 1,
+                    event: 1,
+                    user: {
+                        _id: "$userData._id",
+                        firstname: "$userData.firstname",
+                        lastname: "$userData.lastname",
+                        email: "$userData.email",
+                        avatar: "$userData.avatar"
+                    },
+                    name: 1,
+                    mobile: 1,
+                    email: 1,
+                    status: 1,
+                    foodPreference: 1,
+                    totalAttendees: 1,
+                    vegAttendees: 1,
+                    nonVegAttendees: 1,
+                    isExternal: 1,
+                    city: 1,
+                    respondedAt: 1,
+                    createdAt: 1
+                }
+            }
+        );
+
+        const guests = await EventGuest.aggregate(pipeline);
+
+        // Calculate Stats for the whole event (not just this page)
+        // We use a separate simpler query for stats to avoid the heavy joins if not needed, 
+        // but for accuracy we might want stats based on filters? 
+        // Usually stats are for the WHOLE event regardless of advanced filters.
+        const statsPipeline = [
+            { $match: { event: new mongoose.Types.ObjectId(eventId) } }
+        ];
+        const allGuestsForStats = await EventGuest.aggregate(statsPipeline);
         const respondedGuests = allGuestsForStats.filter(g => g.status !== 'pending');
 
         const stats = {
