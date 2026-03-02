@@ -190,3 +190,60 @@ export const sendWhatsAppEventInviteWithoutFamily = async (recipient, eventData)
         throw error;
     }
 };
+
+/**
+ * Sends a THANK YOU message via WhatsApp after someone RSVPs
+ * Template: "Dear [Name], Thank you for your response for [Event Name]! We are excited to see you there. Regards, [Admin Name]"
+ * @param {Object} recipient - { phone, name }
+ * @param {Object} eventData - { eventName, adminName }
+ * @returns {Promise<Object>}
+ */
+export const sendWhatsAppRSVPThankYou = async (recipient, eventData) => {
+    try {
+        const apiKey = process.env.WHATSAPP_API_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5NDE4YjI0NTliYTM2NGE1NDQ0ZTNhZCIsIm5hbWUiOiJTYW55b2phbiIsImFwcE5hbWUiOiJBaVNlbnN5IiwiY2xpZW50SWQiOiI2OTQxOGIyNDU5YmEzNjRhNTQ0NGUzYTgiLCJhY3RpdmVQbGFuIjoiRlJFRV9GT1JFVkVSIiwiaWF0IjoxNzY1OTAzMTQwfQ.CQmxvkYUH7xPxcnXXa2cOUyqMYMxHQ44wk1pFA6QsPI";
+        const campaignName = process.env.AISENSY_CAMPAIGN_THANK_YOU || "sanyojan_rsvp_thanks"; // Assuming a name
+
+        const phoneWithCountryCode = `91${recipient.phone.replace(/^91/, '')}`;
+        const guestName = recipient.name || 'user';
+
+        const payload = {
+            apiKey: apiKey,
+            campaignName: campaignName,
+            destination: String(phoneWithCountryCode),
+            userName: "Sanyojan",
+            templateParams: [
+                guestName,
+                eventData.eventName || 'Event',
+                eventData.adminName || 'Host'
+            ],
+            source: "rsvp-form",
+            media: {},
+            buttons: [],
+            carouselCards: [],
+            location: {},
+            attributes: {},
+            paramsFallbackValue: {
+                FirstName: "user"
+            }
+        };
+
+        const response = await axios.post(
+            "https://backend.aisensy.com/campaign/t1/api/v2",
+            payload,
+            {
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            }
+        );
+
+        console.log(`[AiSensy ThankYou] Sent to ${recipient.phone}:`, response.data);
+        return response.data;
+    } catch (error) {
+        console.error(
+            `[AiSensy ThankYou] Failed to ${recipient.phone}:`,
+            error.response?.data || error.message
+        );
+        throw error;
+    }
+};

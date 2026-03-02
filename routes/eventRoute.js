@@ -1,5 +1,5 @@
 import express from "express";
-import { createEvent, deleteEvent, getAllEvents, getEventById, getMyEvents, getPublicEventById, addExternalGuest, getEventGuestList, getReceivedInvitations, getEventCities } from "../controllers/eventControllers.js"; // Removed old respondToEvent
+import { createEvent, deleteEvent, getAllEvents, getEventById, getMyEvents, getPublicEventById, addExternalGuest, getEventGuestList, getReceivedInvitations, getEventCities, markEventAttendance, getEventAttendance } from "../controllers/eventControllers.js"; // Removed old respondToEvent
 import { getEventGuests, rsvpToEvent, rsvpToEventPublic } from "../controllers/eventGuestController.js"; // [NEW]
 import { protect } from "../middleware/authtication.js";
 import { checkSubscriptionAccess } from "../middleware/subscriptionMiddleware.js";
@@ -20,9 +20,11 @@ router.get("/:id/cities", protect, checkSubscriptionAccess, getEventCities); // 
 // [NEW] PUBLIC ACCESS ROUTES (No Auth)
 router.get("/public/:id", getPublicEventById);
 router.put("/public/:id/rsvp", rsvpToEventPublic); // Changed to PUT and use new controller
+router.post("/public/:id/attendance", markEventAttendance); // [NEW] Venue Attendance
 
 // Manual Add External Guest (Protected)
 router.post("/:id/external-guests", protect, checkSubscriptionAccess, addExternalGuest);
+router.get("/:id/attendance", protect, checkSubscriptionAccess, getEventAttendance); // [NEW] Host View Attendance
 
 router.get("/invitations", protect, checkSubscriptionAccess, getReceivedInvitations); // [NEW] Received Invitations
 router.get("/mine", protect, checkSubscriptionAccess, getMyEvents);

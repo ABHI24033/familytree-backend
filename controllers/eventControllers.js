@@ -3,12 +3,13 @@ import mongoose from "mongoose";
 import Events from "../models/Events.js";
 import Profile from "../models/Profile.js";
 import User from "../models/User.js";
+import EventAttendance from "../models/EventAttendance.js";
 import { uploadImageToCloudinary } from "../utils/cloudinaryUpload.js";
 import { getUserId } from "../utils/common.js";
 
 import { getAllConnectedProfiles } from "../utils/familyTreeUtils.js";
 import Notification from "../models/Notification.js";
-import { sendWhatsAppEventInviteWithFamily, sendWhatsAppEventInviteWithoutFamily } from "../utils/aisensy.js";
+import { sendWhatsAppEventInviteWithFamily, sendWhatsAppEventInviteWithoutFamily, sendWhatsAppRSVPThankYou } from "../utils/aisensy.js";
 
 export const createEvent = async (req, res) => {
   try {
@@ -200,17 +201,22 @@ export const createEvent = async (req, res) => {
     // Populate for response
     await event.populate("guests.user", "firstname lastname email avatar");
 
-    // [NEW] Create Notification
-    const user = await User.findById(userId);
-    // if (user) {
-    //   await Notification.create({
-    //     sender: userId,
-    //     treeId: treeId,
-    //     type: "event",
-    //     message: `${user.firstname} ${user.lastname} created an event: ${eventName}`,
-    //     referenceId: event._id,
-    //   });
-    // }
+    // [NEW] Create In-App Notifications for each invited guest
+    const creator = await User.findById(userId);
+    if (creator) {
+      const notificationPromises = formattedGuests
+        .filter(g => g.user.toString() !== userId.toString()) // Don't notify creator
+        .map(g => Notification.create({
+          sender: userId,
+          recipient: g.user,
+          treeId: treeId,
+          type: "event",
+          message: `${creator.firstname} ${creator.lastname} invited you to an event: ${eventName}`,
+          referenceId: event._id,
+        }));
+
+      await Promise.all(notificationPromises);
+    }
 
     // TODO: Send Email Invitations here (Mock or Real)
 
@@ -383,7 +389,13 @@ export const getAllEvents = async (req, res) => {
     }
     const treeId = userProfile.treeId;
 
-    let matchStage = { treeId: treeId }; // Restrict to tree
+    let matchStage = {
+      treeId: treeId,
+      $or: [
+        { createdBy: userId },
+        { "guests.user": userId }
+      ]
+    }; // Restrict to tree and invited/host only
 
     // ---------- If specific event ID is requested ----------
     if (eventId) {
@@ -392,7 +404,7 @@ export const getAllEvents = async (req, res) => {
 
     // ---------- Cursor Pagination ----------
     if (cursor) {
-      matchStage._id = { $lt: new mongoose.Types.ObjectId(cursor) };
+      matchStage._id = { ...matchStage._id, $lt: new mongoose.Types.ObjectId(cursor) };
     }
 
     const pipeline = [
@@ -873,6 +885,21 @@ export const respondToEventPublic = async (req, res) => {
 
     await event.save();
 
+    // Send WhatsApp Thank You Message
+    try {
+      const creator = await User.findById(event.createdBy);
+      await sendWhatsAppRSVPThankYou(
+        { phone: mobile, name: name },
+        {
+          eventName: event.eventName,
+          adminName: creator ? `${creator.firstname} ${creator.lastname}` : "Host"
+        }
+      );
+    } catch (whatsappError) {
+      console.error("Failed to send WhatsApp thank you:", whatsappError.message);
+      // Don't fail the RSVP if notification fails
+    }
+
     return res.status(200).json({
       success: true,
       message: `You have successfully RSVP'd as ${status}`,
@@ -1060,3 +1087,80 @@ export const getReceivedInvitations = async (req, res) => {
 };
 
 
+
+// [NEW] Mark Event Attendance (Venue QR Scan)
+export const markEventAttendance = async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const { name, mobile } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ success: false, message: "Invalid Event ID" });
+    }
+
+    if (!name || !mobile) {
+      return res.status(400).json({ success: false, message: "Name and Mobile are required" });
+    }
+
+    const event = await Events.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ success: false, message: "Event not found" });
+    }
+
+    // Record attendance
+    try {
+      await EventAttendance.create({
+        event: eventId,
+        name,
+        mobile
+      });
+    } catch (err) {
+      if (err.code === 11000) {
+        return res.status(409).json({ success: false, message: "Attendance already recorded for this mobile number" });
+      }
+      throw err;
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Attendance recorded successfully! Welcome to the event.",
+      data: { name, eventName: event.eventName }
+    });
+
+  } catch (err) {
+    console.error("markEventAttendance Error:", err);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// [NEW] Get Event Attendance List (Host Only)
+export const getEventAttendance = async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const userId = getUserId(req);
+
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ success: false, message: "Invalid Event ID" });
+    }
+
+    const event = await Events.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ success: false, message: "Event not found" });
+    }
+
+    if (event.createdBy.toString() !== userId) {
+      return res.status(403).json({ success: false, message: "Only the host can view attendance reports" });
+    }
+
+    const attendance = await EventAttendance.find({ event: eventId }).sort({ attendedAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      data: attendance
+    });
+
+  } catch (err) {
+    console.error("getEventAttendance Error:", err);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
