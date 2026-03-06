@@ -247,3 +247,59 @@ export const sendWhatsAppRSVPThankYou = async (recipient, eventData) => {
         throw error;
     }
 };
+
+/**
+ * Sends a temporary password via WhatsApp using AiSensy API
+ * Template: "Dear [Name], Welcome to Sanyojan! Your temporary password to log in is [Password]. Please change it after your first login. Regards, Sanyojan Team"
+ * @param {Object} recipient - { phone, name }
+ * @param {string} tempPassword - The temporary password
+ * @returns {Promise<Object>}
+ */
+export const sendWhatsAppTemporaryPassword = async (recipient, tempPassword) => {
+    try {
+        const apiKey = process.env.WHATSAPP_API_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5NDE4YjI0NTliYTM2NGE1NDQ0ZTNhZCIsIm5hbWUiOiJTYW55b2phbiIsImFwcE5hbWUiOiJBaVNlbnN5IiwiY2xpZW50SWQiOiI2OTQxOGIyNDU5YmEzNjRhNTQ0NGUzYTgiLCJhY3RpdmVQbGFuIjoxNzY1OTAzMTQwfQ.CQmxvkYUH7xPxcnXXa2cOUyqMYMxHQ44wk1pFA6QsPI";
+        const campaignName = process.env.AISENSY_CAMPAIGN_TEMP_PASSWORD || "sanyojan_temp_pass";
+
+        const phoneWithCountryCode = `91${recipient.phone.replace(/^91/, '')}`;
+        const guestName = recipient.name || 'user';
+
+        const payload = {
+            apiKey: apiKey,
+            campaignName: campaignName,
+            destination: String(phoneWithCountryCode),
+            userName: "Sanyojan",
+            templateParams: [
+                guestName,
+                tempPassword
+            ],
+            source: "admin-creation",
+            media: {},
+            buttons: [],
+            carouselCards: [],
+            location: {},
+            attributes: {},
+            paramsFallbackValue: {
+                FirstName: "user"
+            }
+        };
+
+        const response = await axios.post(
+            "https://backend.aisensy.com/campaign/t1/api/v2",
+            payload,
+            {
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            }
+        );
+
+        console.log(`[AiSensy TempPassword] Sent to ${recipient.phone}:`, response.data);
+        return response.data;
+    } catch (error) {
+        console.error(
+            `[AiSensy TempPassword] Failed to ${recipient.phone}:`,
+            error.response?.data || error.message
+        );
+        throw error;
+    }
+};

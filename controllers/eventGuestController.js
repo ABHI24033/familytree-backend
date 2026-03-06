@@ -28,8 +28,6 @@ export const getEventGuests = async (req, res) => {
         // Basic Filters (Status & Search)
         if (status) {
             matchStage.status = status;
-        } else {
-            matchStage.status = { $ne: "pending" };
         }
 
         if (search) {

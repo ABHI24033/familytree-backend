@@ -70,6 +70,7 @@ export const createProfile = async (req, res, next) => {
     }
 
     // Create profile
+    profileData.isCompleted = true;
     const profile = await Profile.create(profileData);
 
     // Send welcome email if email is provided
@@ -208,6 +209,7 @@ export const updateProfile = async (req, res, next) => {
     }
 
     // Update profile
+    updates.isCompleted = true;
     let query = Profile.findOneAndUpdate(
       { user: userId },
       { $set: updates },
@@ -348,6 +350,7 @@ export const updateUserProfileById = async (req, res, next) => {
     }
 
     // Update profile
+    updates.isCompleted = true;
     let query = Profile.findOneAndUpdate(
       { user: userId },
       { $set: updates },

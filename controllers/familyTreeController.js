@@ -6,6 +6,7 @@ import { sendFamilyMemberWelcomeEmail } from "../utils/emailService.js";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import Notification from "../models/Notification.js";
+import { sendWhatsAppTemporaryPassword } from "../utils/aisensy.js";
 
 // Get user ID from request
 const getUserId = (req) => {
@@ -44,7 +45,7 @@ const getAllConnectedProfiles = async (startUserId) => {
     const profile = await Profile.findOne({ user: currentId })
       .populate('user', 'firstname lastname phone email country_code isAdmin isSuperAdmin');
 
-    if (!profile) continue;
+    if (!profile || !profile.user) continue;
 
     profilesMap.set(currentId, profile);
 
@@ -74,7 +75,11 @@ const getAllConnectedProfiles = async (startUserId) => {
 // Helper: Self-heal missing partner links based on shared children
 const repairRelationships = async (profiles) => {
   let repairsMade = false;
-  const profileMap = new Map(profiles.map(p => [p.user._id.toString(), p]));
+  const profileMap = new Map(
+    profiles
+      .filter(p => p && p.user)
+      .map(p => [p.user._id.toString(), p])
+  );
 
   for (const profile of profiles) {
     const childrenIds = [...(profile.sons || []), ...(profile.daughters || [])];
@@ -483,42 +488,49 @@ export const addFamilyMember = async (req, res, next) => {
       return res.status(400).json({ message: "Religion is required" });
     }
 
-    // Check if user already exists with this phone (if phone is provided)
+    // Find or Create User
+    let newUser = null;
+    let isExistingUser = false;
+
     if (phone && phone.trim() !== "") {
-      const existingUser = await User.findOne({ phone });
-      if (existingUser) {
-        return res.status(400).json({ message: "User with this phone number already exists" });
+      newUser = await User.findOne({ phone });
+      if (newUser) {
+        isExistingUser = true;
       }
     }
 
-    // Check if profile exists with this email (if email is provided)
-    if (email && email.trim() !== "") {
+    if (!newUser && email && email.trim() !== "") {
       const existingProfile = await Profile.findOne({ email });
       if (existingProfile) {
-        return res.status(400).json({ message: "User with this email already exists" });
+        newUser = await User.findById(existingProfile.user);
+        if (newUser) {
+          isExistingUser = true;
+        }
       }
     }
 
-    // 2. Create User
-    // If Late and no phone, do not set phone field (it will be undefined/null, handled by sparse index)
     const temporaryPassword = generateRandomPassword();
     const hashedPassword = await bcrypt.hash(temporaryPassword, 12);
 
-    const userData = {
-      firstname,
-      lastname,
-      password: hashedPassword, // Dummy or real password
-      country_code: "+91",
-      is_verified: false,
-      status: 'active'
-    };
+    if (!newUser) {
+      // Create User
+      const userData = {
+        firstname,
+        lastname,
+        password: hashedPassword,
+        country_code: "+91",
+        is_verified: false,
+        isFirstLogin: true,
+        status: 'active'
+      };
 
-    if (phone && phone.trim() !== "") {
-      userData.phone = phone;
+      if (phone && phone.trim() !== "") {
+        userData.phone = phone;
+      }
+
+      newUser = new User(userData);
+      await newUser.save();
     }
-
-    const newUser = new User(userData);
-    await newUser.save();
 
     let newProfile; // Declare outside for error handling scope
 
@@ -539,19 +551,33 @@ export const addFamilyMember = async (req, res, next) => {
         else if (['mother', 'sister', 'daughter'].includes(relationship)) memberGender = 'female';
       }
 
-      // Create profile for new user
-      newProfile = await Profile.create({
-        user: newUser._id,
-        treeId: treeId, // Assign treeId
-        prefix,
-        gender: memberGender,
-        dob: new Date(dob),
-        dateOfDeath: dateOfDeath ? new Date(dateOfDeath) : undefined,
-        age: parseInt(age),
-        email: email ? email.trim().toLowerCase() : undefined,
-        religion: religion.trim(),
-        profilePicture: profilePictureUrl
-      });
+      // Find or Create profile
+      newProfile = await Profile.findOne({ user: newUser._id });
+
+      if (!newProfile) {
+        // Create profile for new user
+        newProfile = await Profile.create({
+          user: newUser._id,
+          treeId: treeId, // Assign treeId
+          prefix,
+          gender: memberGender,
+          dob: new Date(dob),
+          dateOfDeath: dateOfDeath ? new Date(dateOfDeath) : undefined,
+          age: parseInt(age),
+          email: email ? email.trim().toLowerCase() : undefined,
+          religion: religion.trim(),
+          profilePicture: profilePictureUrl
+        });
+      } else {
+        // Link existing profile to this tree if it's not already linked
+        // Note: In some architectures, a user can only be in one tree. 
+        // If it's already in a tree, we'll keep that treeId or update it?
+        // For now, let's assume we link them.
+        if (!newProfile.treeId) {
+          newProfile.treeId = treeId;
+          await newProfile.save();
+        }
+      }
       // If target didn't have treeId, update it now (migration on the fly)
       if (!targetProfile.treeId) {
         targetProfile.treeId = treeId;
@@ -767,8 +793,8 @@ export const addFamilyMember = async (req, res, next) => {
         siblingIds.push(...Array.from(allSiblingIds));
       }
 
-      // Send welcome email (ONLY if not deceased and email exists)
-      if (newProfile.email && !isDeceased && validPhone && !validPhone.startsWith('DEAD-')) {
+      // Send welcome email (ONLY if not deceased and email exists and NOT AN EXISTING USER)
+      if (!isExistingUser && newProfile.email && !isDeceased && validPhone && !validPhone.startsWith('DEAD-')) {
         const addedByName = `${targetUser.firstname} ${targetUser.lastname}`;
         const familyMemberName = `${newUser.firstname} ${newUser.lastname}`;
         sendFamilyMemberWelcomeEmail(
@@ -783,6 +809,15 @@ export const addFamilyMember = async (req, res, next) => {
         ).catch(err => console.error("Email sending failed:", err));
       }
 
+      // [NEW] Send temporary password via WhatsApp (ONLY IF NOT EXISTING USER)
+      if (!isExistingUser && validPhone && !validPhone.startsWith('DEAD-') && !isDeceased) {
+        sendWhatsAppTemporaryPassword(
+          { phone: validPhone, name: `${newUser.firstname} ${newUser.lastname}` },
+          temporaryPassword
+        ).catch(err => console.error("WhatsApp sending (temp pass) failed:", err));
+        console.log(`Temporary password sent to ${validPhone}: ${temporaryPassword}`);
+      }
+
       // [NEW] Create Notification for New Family Member
       // Notify everyone in the tree except the person who added them
       const fullCurrentUser = await User.findById(currentUserId);
@@ -792,13 +827,14 @@ export const addFamilyMember = async (req, res, next) => {
           treeId: treeId,
           recipient: null, // Broadcast
           type: "new_member",
-          message: `${fullCurrentUser.firstname} ${fullCurrentUser.lastname} added a new family member: ${newUser.firstname} ${newUser.lastname}`,
+          message: `${fullCurrentUser.firstname} ${fullCurrentUser.lastname} ${isExistingUser ? 'linked' : 'added'} a family member: ${newUser.firstname} ${newUser.lastname}`,
           referenceId: newUser._id
         });
       }
 
-      return res.status(201).json({
-        message: "Family member added successfully",
+      return res.status(isExistingUser ? 200 : 201).json({
+        message: isExistingUser ? "User already exists and has been linked to the family tree" : "Family member added successfully",
+        exists: isExistingUser,
         data: {
           // Return the new person in the normalized format
           id: newUser._id.toString(),
@@ -819,9 +855,45 @@ export const addFamilyMember = async (req, res, next) => {
       });
 
     } catch (innerError) {
-      console.error("Rollback: Deleting partial data due to error:", innerError.message);
-      if (newProfile) await Profile.findByIdAndDelete(newProfile._id);
-      if (newUser) await User.findByIdAndDelete(newUser._id);
+      console.error("Rollback: Cleaning up partial data due to error:", innerError.message);
+
+      const newUserId = newUser?._id;
+      const newProfileId = newProfile?._id;
+
+      if (newProfileId) await Profile.findByIdAndDelete(newProfileId);
+      if (newUserId) {
+        // Clear all references to this user from other profiles
+        await Profile.updateMany(
+          { partner: newUserId },
+          { $set: { partner: null } }
+        );
+        await Profile.updateMany(
+          { father: newUserId },
+          { $set: { father: null } }
+        );
+        await Profile.updateMany(
+          { mother: newUserId },
+          { $set: { mother: null } }
+        );
+        await Profile.updateMany(
+          { sons: newUserId },
+          { $pull: { sons: newUserId } }
+        );
+        await Profile.updateMany(
+          { daughters: newUserId },
+          { $pull: { daughters: newUserId } }
+        );
+        await Profile.updateMany(
+          { brothers: newUserId },
+          { $pull: { brothers: newUserId } }
+        );
+        await Profile.updateMany(
+          { sisters: newUserId },
+          { $pull: { sisters: newUserId } }
+        );
+
+        await User.findByIdAndDelete(newUserId);
+      }
       throw innerError;
     }
 

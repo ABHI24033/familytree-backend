@@ -15,6 +15,7 @@ import {
   getCurrentUser,
   getAllUsersIp,
   getIp,
+  updatePasswordAfterFirstLogin
 } from "../controllers/authController.js";
 import { protect, superAdminOnly } from "../middleware/authtication.js";
 
@@ -38,6 +39,7 @@ router.post("/forgot-password/reset", resetPassword); // Reset password after OT
 
 // -------- Session Management --------
 router.get("/me", protect, getCurrentUser); // Get current user info
+router.post("/update-first-password", protect, updatePasswordAfterFirstLogin);
 router.post("/refresh", refreshToken);
 router.post("/logout", logoutUser);
 

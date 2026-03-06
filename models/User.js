@@ -113,7 +113,11 @@ const userSchema = new Schema(
     family_members: [{
       type: Schema.Types.ObjectId,
       ref: "User"
-    }]
+    }],
+    isFirstLogin: {
+      type: Boolean,
+      default: false
+    }
   },
   {
     timestamps: true

@@ -788,7 +788,8 @@ export const getEventGuestList = async (req, res) => {
       event: {
         eventName: event.eventName,
         startDate: event.startDate,
-        startTime: event.startTime // Add more if needed suitable for header
+        startTime: event.startTime,
+        createdBy: event.createdBy
       }
     });
 
@@ -1010,9 +1011,10 @@ export const getReceivedInvitations = async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
 
     // Build Query
-    // We want events where guests.user == userId
+    // We want events where guests.user == userId AND we are NOT the creator
     let query = {
-      "guests.user": userId
+      "guests.user": userId,
+      createdBy: { $ne: userId }
     };
 
     // Filter by Type logic

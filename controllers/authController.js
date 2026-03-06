@@ -467,7 +467,7 @@ export const verifyOtpForLogin = async (req, res) => {
     const user = await User.findOne({
       phone: phoneValidation.phone,
       is_deleted: false
-    }).select('+otp +otpExpires');
+    }).select('+otp +otpExpires +isFirstLogin');
 
     if (!user) {
       return res.status(404).json({
@@ -820,9 +820,17 @@ export const resetPassword = async (req, res) => {
     user.password = hashedPassword;
     await clearOtp(user);
 
+    // Generate JWT tokens to log the user in automatically
+    const accessToken = generateAccessToken(String(user._id));
+    const refreshToken = generateRefreshToken(String(user._id));
+
+    // Set tokens in HTTP-only cookies
+    setAuthCookies(res, accessToken, refreshToken);
+
     return res.status(200).json({
       success: true,
-      message: "Password reset successfully"
+      message: "Password reset successfully",
+      accessToken
     });
   } catch (error) {
     console.error("Reset Password Error:", error);
@@ -901,7 +909,7 @@ export const getCurrentUser = async (req, res) => {
     }
 
     // Get user with password field to check if password is set
-    const user = await User.findById(userId).select('+password');
+    const user = await User.findById(userId).select('+password +isFirstLogin');
     if (!user || user.is_deleted) {
       return res.status(404).json({
         success: false,
@@ -909,8 +917,8 @@ export const getCurrentUser = async (req, res) => {
       });
     }
 
-    // Check if profile exists and get profilePicture and email
-    const profile = await Profile.findOne({ user: userId }).select('profilePicture email treeId religion');
+    // Check if profile exists and get profilePicture, email, treeId, religion, and isCompleted
+    const profile = await Profile.findOne({ user: userId }).select('profilePicture email treeId religion isCompleted');
 
     // Format user response and add profilePicture
     const userResponse = formatUserResponse(user);
@@ -929,6 +937,7 @@ export const getCurrentUser = async (req, res) => {
         user: userResponse,
         hasPassword: !!user.password,
         hasProfile: !!profile,
+        isProfileCompleted: !!profile?.isCompleted,
         accessToken // Return token so frontend can track expiry
       }
     });
@@ -1014,4 +1023,75 @@ export const getAllUsersIp = async (req, res) => {
 export const getIp = (req, res) => {
   const ip = getClientIp(req);
   res.status(200).json({ ip });
+};
+
+// ------------------- UPDATE PASSWORD AFTER FIRST LOGIN -------------------
+export const updatePasswordAfterFirstLogin = async (req, res) => {
+  try {
+    const { password, confirm_password } = req.body;
+    const userId = req.user?.id || req.user?._id;
+
+    // Validate required fields
+    const requiredValidation = validateRequiredFields({ password, confirm_password });
+    if (!requiredValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: requiredValidation.message
+      });
+    }
+
+    // Validate password
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: passwordValidation.message
+      });
+    }
+
+    // Validate password confirmation
+    const passwordMatchValidation = validatePasswordMatch(password, confirm_password);
+    if (!passwordMatchValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: passwordMatchValidation.message
+      });
+    }
+
+    // Find user
+    const user = await User.findById(userId).select('+isFirstLogin');
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Hash password using bcrypt
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // Update user: reset password and set isFirstLogin to false
+    user.password = hashedPassword;
+    user.isFirstLogin = false;
+    await user.save();
+
+    // Generate JWT tokens to refresh the session
+    const accessToken = generateAccessToken(String(user._id));
+    const refreshToken = generateRefreshToken(String(user._id));
+
+    // Set tokens in HTTP-only cookies
+    setAuthCookies(res, accessToken, refreshToken);
+
+    return res.status(200).json({
+      success: true,
+      message: "Password updated successfully. Please complete your profile.",
+      accessToken
+    });
+  } catch (error) {
+    console.error("Update Password Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
+  }
 };

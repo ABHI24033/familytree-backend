@@ -183,7 +183,9 @@ const profileSchema = new Schema(
     daughters: [{ type: Schema.Types.ObjectId, ref: "User" }],
 
     // Guardian (Special role for logged-in user)
-    guardian: { type: Schema.Types.ObjectId, ref: "User" }
+    guardian: { type: Schema.Types.ObjectId, ref: "User" },
+
+    isCompleted: { type: Boolean, default: false }
   },
   {
     timestamps: true
