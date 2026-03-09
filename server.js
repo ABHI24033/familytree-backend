@@ -141,7 +141,7 @@ if (process.env.VERCEL !== '1') {
     // Start cron only after server is alive
     try {
       initScheduler();
-      console.log("⏰ Scheduler initialized");
+      console.log("Scheduler initialized");
     } catch (err) {
       console.error("Scheduler failed to start:", err);
     }
