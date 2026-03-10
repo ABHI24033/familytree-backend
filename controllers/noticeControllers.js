@@ -73,6 +73,8 @@ export const getAllNoticesForAdmin = async (req, res) => {
       limit = 10,
       search = "",
       date = "",
+      startDate = "",
+      endDate = "",
       sort = "latest",
       status = "",
     } = req.query;
@@ -89,7 +91,7 @@ export const getAllNoticesForAdmin = async (req, res) => {
     // Auto-expire logic (admin should also know)
     await Notice.updateMany(
       { endDate: { $lt: new Date() }, status: { $ne: "Expired" } },
-      { status: "Expired" }
+      { status: "Expired", isActive: false }
     );
 
     // ADMIN can see everything
@@ -103,7 +105,32 @@ export const getAllNoticesForAdmin = async (req, res) => {
     }
     if (status) matchStage.status = status;
 
-    if (date && date !== "null" && date !== "undefined" && date !== "") {
+    // Date range filter (preferred)
+    if ((startDate && startDate !== "null" && startDate !== "undefined" && startDate !== "") ||
+      (endDate && endDate !== "null" && endDate !== "undefined" && endDate !== "")) {
+      let range = {};
+
+      if (startDate && startDate !== "null" && startDate !== "undefined" && startDate !== "") {
+        const dStart = new Date(startDate);
+        if (!isNaN(dStart.getTime())) {
+          dStart.setHours(0, 0, 0, 0);
+          range.$gte = dStart;
+        }
+      }
+
+      if (endDate && endDate !== "null" && endDate !== "undefined" && endDate !== "") {
+        const dEnd = new Date(endDate);
+        if (!isNaN(dEnd.getTime())) {
+          dEnd.setHours(23, 59, 59, 999);
+          range.$lte = dEnd;
+        }
+      }
+
+      if (Object.keys(range).length > 0) {
+        matchStage.startDate = range;
+      }
+    } else if (date && date !== "null" && date !== "undefined" && date !== "") {
+      // Backwards compatibility: single date filter
       const d = new Date(date);
       if (!isNaN(d.getTime())) {
         const startOfDay = new Date(d);
@@ -154,6 +181,8 @@ export const getAllNoticesForUsers = async (req, res) => {
       limit = 10,
       search = "",
       date = "",
+      startDate = "",
+      endDate = "",
       sort = "latest",
     } = req.query;
 
@@ -169,7 +198,7 @@ export const getAllNoticesForUsers = async (req, res) => {
     // Auto-expire notices
     await Notice.updateMany(
       { endDate: { $lt: new Date() }, status: { $ne: "Expired" } },
-      { status: "Expired" }
+      { status: "Expired", isActive: false }
     );
 
     // USER only sees active + not expired
@@ -185,7 +214,32 @@ export const getAllNoticesForUsers = async (req, res) => {
       ];
     }
 
-    if (date && date !== "null" && date !== "undefined" && date !== "") {
+    // Date range filter (preferred)
+    if ((startDate && startDate !== "null" && startDate !== "undefined" && startDate !== "") ||
+      (endDate && endDate !== "null" && endDate !== "undefined" && endDate !== "")) {
+      let range = {};
+
+      if (startDate && startDate !== "null" && startDate !== "undefined" && startDate !== "") {
+        const dStart = new Date(startDate);
+        if (!isNaN(dStart.getTime())) {
+          dStart.setHours(0, 0, 0, 0);
+          range.$gte = dStart;
+        }
+      }
+
+      if (endDate && endDate !== "null" && endDate !== "undefined" && endDate !== "") {
+        const dEnd = new Date(endDate);
+        if (!isNaN(dEnd.getTime())) {
+          dEnd.setHours(23, 59, 59, 999);
+          range.$lte = dEnd;
+        }
+      }
+
+      if (Object.keys(range).length > 0) {
+        matchStage.startDate = range;
+      }
+    } else if (date && date !== "null" && date !== "undefined" && date !== "") {
+      // Backwards compatibility: single date filter
       const d = new Date(date);
       if (!isNaN(d.getTime())) {
         const startOfDay = new Date(d);
@@ -275,7 +329,7 @@ export const getAllNotices = async (req, res) => {
     // Auto-expire logic: update status for expired notices
     await Notice.updateMany(
       { endDate: { $lt: new Date() }, status: { $ne: "Expired" } },
-      { status: "Expired" }
+      { status: "Expired", isActive: false }
     );
 
     const pipeline = [
@@ -327,6 +381,7 @@ export const getSingleNotice = async (req, res) => {
     // Auto-expire check
     if (notice.endDate && notice.endDate < new Date()) {
       notice.status = "Expired";
+      notice.isActive = false;
       await notice.save();
     }
 

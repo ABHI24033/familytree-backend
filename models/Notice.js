@@ -64,10 +64,11 @@ const NoticeSchema = new mongoose.Schema(
 // Text index for search
 NoticeSchema.index({ title: "text", description: "text" });
 
-// Auto-expire notice if endDate < today (optional)
+// Auto-expire notice if endDate < today
 NoticeSchema.pre("save", function (next) {
   if (this.endDate && this.endDate < new Date()) {
     this.status = "Expired";
+    this.isActive = false;
   }
   next();
 });
