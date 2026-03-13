@@ -22,6 +22,7 @@ import notificationRoutes from "./routes/notificationRoutes.js";
 import contactGroupRoutes from "./routes/contactGroupRoutes.js";
 import systemSettingRoutes from "./routes/systemSettingRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
+import roleRoutes from "./routes/roleRoutes.js";
 import { initScheduler } from "./controllers/scheduler.js";
 import { initializeSettings } from "./controllers/systemSettingController.js";
 
@@ -126,6 +127,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/contact-groups", contactGroupRoutes);
 app.use("/api/settings", systemSettingRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/roles", roleRoutes);
 
 // Error Handler
 app.use(errorHandler);

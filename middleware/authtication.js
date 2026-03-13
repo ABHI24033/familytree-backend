@@ -45,3 +45,22 @@ export const superAdminOnly = async (req, res, next) => {
     });
   }
 };
+
+export const adminOnly = async (req, res, next) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    const user = await User.findById(userId);
+
+    if (user && (user.isAdmin || user.isSuperAdmin)) return next();
+
+    return res.status(403).json({
+      success: false,
+      message: "Access denied. Admin privileges required."
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Server error checking permissions"
+    });
+  }
+};

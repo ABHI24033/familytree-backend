@@ -46,16 +46,10 @@ export const createProfile = async (req, res, next) => {
       profileData.profilePicture = profilePictureUrl;
     }
 
-    // NEW LOGIC: New Tree Admin Flow
     // If no treeId is provided (meaning independent user not joined via invite/family),
     // they become the root of a new tree.
     if (!profileData.treeId) {
       profileData.treeId = userId; // Tree ID is the Root User ID
-
-      // Grant Admin Access
-      await User.findByIdAndUpdate(userId, {
-        isAdmin: true,
-      });
     }
 
     // Validate required fields

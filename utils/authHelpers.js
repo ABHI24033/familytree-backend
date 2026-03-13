@@ -66,6 +66,8 @@ export const formatUserResponse = (user) => {
     country_code: user.country_code,
     is_verified: user.is_verified,
     isAdmin: user.isAdmin,
+    isSubAdmin: user.isSubAdmin,
+    isCoordinator: user.isCoordinator,
     isSuperAdmin: user.isSuperAdmin,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
