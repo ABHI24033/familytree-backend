@@ -258,9 +258,9 @@ export const sendWhatsAppRSVPThankYou = async (recipient, eventData) => {
 export const sendWhatsAppTemporaryPassword = async (recipient, tempPassword) => {
     try {
         const apiKey = process.env.WHATSAPP_API_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5NDE4YjI0NTliYTM2NGE1NDQ0ZTNhZCIsIm5hbWUiOiJTYW55b2phbiIsImFwcE5hbWUiOiJBaVNlbnN5IiwiY2xpZW50SWQiOiI2OTQxOGIyNDU5YmEzNjRhNTQ0NGUzYTgiLCJhY3RpdmVQbGFuIjoxNzY1OTAzMTQwfQ.CQmxvkYUH7xPxcnXXa2cOUyqMYMxHQ44wk1pFA6QsPI";
-        const campaignName = process.env.AISENSY_CAMPAIGN_TEMP_PASSWORD || "sanyojan_temp_pass";
+        const campaignName = process.env.AISENSY_CAMPAIGN_SIGNUP_NEW || "registrationsucess";
 
-        const phoneWithCountryCode = `91${recipient.phone.replace(/^91/, '')}`;
+        const phoneWithCountryCode = `91${recipient.phone.replace(/^91/, '').replace(/^\+91/, '')}`;
         const guestName = recipient.name || 'user';
 
         const payload = {
@@ -270,7 +270,8 @@ export const sendWhatsAppTemporaryPassword = async (recipient, tempPassword) => 
             userName: "Sanyojan",
             templateParams: [
                 guestName,
-                tempPassword
+                recipient.phone, // {{2}} Your user id is {{2}}
+                tempPassword     // {{3}} Password is {{3}}
             ],
             source: "admin-creation",
             media: {},

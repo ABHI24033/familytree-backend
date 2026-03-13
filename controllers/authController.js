@@ -172,6 +172,13 @@ export const verifyOtp = async (req, res) => {
 
     // OTP verified - update user
     user.is_verified = true;
+
+    // Role bootstrap: first verified registration becomes main Admin.
+    const adminExists = await User.exists({ isAdmin: true, is_deleted: false });
+    if (!adminExists) {
+      user.isAdmin = true;
+    }
+
     await clearOtp(user);
 
     // Generate JWT tokens

@@ -53,6 +53,14 @@ const userSchema = new Schema(
       type: Boolean,
       default: false
     },
+    isSubAdmin: {
+      type: Boolean,
+      default: false
+    },
+    isCoordinator: {
+      type: Boolean,
+      default: false
+    },
     isSuperAdmin: {
       type: Boolean,
       default: false
