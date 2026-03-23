@@ -3,6 +3,7 @@ import Events from '../models/Events.js';
 import Notification from '../models/Notification.js';
 import Notice from '../models/Notice.js';
 import User from '../models/User.js';
+import Profile from '../models/Profile.js';
 
 export const initScheduler = () => {
     // Schedule a task to run every day at 09:00 AM (server time)
@@ -10,6 +11,10 @@ export const initScheduler = () => {
         console.log('Running daily housekeeping tasks...');
         await Promise.all([
             checkAndSendEventReminders(),
+            checkAndSendEventParticipationConfirmations(),
+            checkAndSendBirthdayReminders(),
+            checkAndSendAnniversaryReminders(),
+            checkAndSendDeathAnniversaryReminders(),
             deleteOldNotices(),
             checkSubscriptionExpiry()
         ]);
@@ -126,5 +131,213 @@ const checkSubscriptionExpiry = async () => {
 
     } catch (error) {
         console.error("Error in checkSubscriptionExpiry:", error);
+    }
+};
+
+// Helper function to get family members for notifications
+const getFamilyMembersForNotifications = async (treeId, excludeUserId) => {
+    try {
+        const profiles = await Profile.find({ treeId }).populate('user', 'firstname lastname');
+        return profiles
+            .filter(p => p.user && p.user._id.toString() !== excludeUserId.toString())
+            .map(p => ({
+                userId: p.user._id,
+                name: `${p.user.firstname} ${p.user.lastname}`,
+                profilePicture: p.profilePicture
+            }));
+    } catch (error) {
+        console.error("Error getting family members:", error);
+        return [];
+    }
+};
+
+// Send birthday reminders (1 day before)
+const checkAndSendBirthdayReminders = async () => {
+    try {
+        console.log("Checking birthday reminders...");
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        const month = tomorrow.getMonth();
+        const day = tomorrow.getDate();
+        
+        // Find profiles with birthdays tomorrow
+        const profiles = await Profile.find({
+            dob: { $exists: true, $ne: null },
+            dateOfDeath: { $exists: false } // Only for living members
+        }).populate('user', 'firstname lastname');
+        
+        for (const profile of profiles) {
+            if (!profile.dob || !profile.user) continue;
+            
+            const dob = new Date(profile.dob);
+            if (dob.getMonth() === month && dob.getDate() === day) {
+                const age = tomorrow.getFullYear() - dob.getFullYear();
+                const familyMembers = await getFamilyMembersForNotifications(profile.treeId, profile.user._id);
+                
+                // Notify family members
+                for (const member of familyMembers) {
+                    await Notification.create({
+                        sender: profile.user._id,
+                        recipient: member.userId,
+                        treeId: profile.treeId,
+                        type: "new_member",
+                        message: `Tomorrow is ${profile.user.firstname}'s birthday! They will be turning ${age}.`,
+                        referenceId: profile.user._id
+                    });
+                }
+                
+                // Notify the birthday person themselves
+                await Notification.create({
+                    sender: profile.user._id,
+                    recipient: profile.user._id,
+                    treeId: profile.treeId,
+                    type: "new_member",
+                    message: `Tomorrow is your birthday! You will be turning ${age}. Wishing you a wonderful year ahead!`,
+                    referenceId: profile.user._id
+                });
+                
+                console.log(`Birthday reminder sent for ${profile.user.firstname}`);
+            }
+        }
+    } catch (error) {
+        console.error("Error in checkAndSendBirthdayReminders:", error);
+    }
+};
+
+// Send marriage anniversary reminders (1 day before)
+const checkAndSendAnniversaryReminders = async () => {
+    try {
+        console.log("Checking marriage anniversary reminders...");
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        const month = tomorrow.getMonth();
+        const day = tomorrow.getDate();
+        
+        // Find profiles with anniversaries tomorrow
+        const profiles = await Profile.find({
+            marriageDate: { $exists: true, $ne: null },
+            dateOfDeath: { $exists: false } // Only for living members
+        }).populate('user', 'firstname lastname');
+        
+        for (const profile of profiles) {
+            if (!profile.marriageDate || !profile.user) continue;
+            
+            const marriageDate = new Date(profile.marriageDate);
+            if (marriageDate.getMonth() === month && marriageDate.getDate() === day) {
+                const years = tomorrow.getFullYear() - marriageDate.getFullYear();
+                const familyMembers = await getFamilyMembersForNotifications(profile.treeId, profile.user._id);
+                
+                // Notify family members
+                for (const member of familyMembers) {
+                    await Notification.create({
+                        sender: profile.user._id,
+                        recipient: member.userId,
+                        treeId: profile.treeId,
+                        type: "new_member",
+                        message: `Tomorrow is ${profile.user.firstname}'s ${years}th marriage anniversary!`,
+                        referenceId: profile.user._id
+                    });
+                }
+                
+                // Notify the couple
+                await Notification.create({
+                    sender: profile.user._id,
+                    recipient: profile.user._id,
+                    treeId: profile.treeId,
+                    type: "new_member",
+                    message: `Tomorrow is your ${years}th marriage anniversary! Wishing you many more years of happiness!`,
+                    referenceId: profile.user._id
+                });
+                
+                console.log(`Anniversary reminder sent for ${profile.user.firstname}`);
+            }
+        }
+    } catch (error) {
+        console.error("Error in checkAndSendAnniversaryReminders:", error);
+    }
+};
+
+// Send death anniversary reminders (1 day before)
+const checkAndSendDeathAnniversaryReminders = async () => {
+    try {
+        console.log("Checking death anniversary reminders...");
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        const month = tomorrow.getMonth();
+        const day = tomorrow.getDate();
+        
+        // Find profiles with death anniversaries tomorrow
+        const profiles = await Profile.find({
+            dateOfDeath: { $exists: true, $ne: null }
+        }).populate('user', 'firstname lastname');
+        
+        for (const profile of profiles) {
+            if (!profile.dateOfDeath || !profile.user) continue;
+            
+            const deathDate = new Date(profile.dateOfDeath);
+            if (deathDate.getMonth() === month && deathDate.getDate() === day) {
+                const years = tomorrow.getFullYear() - deathDate.getFullYear();
+                const familyMembers = await getFamilyMembersForNotifications(profile.treeId, profile.user._id);
+                
+                // Notify family members about death anniversary
+                for (const member of familyMembers) {
+                    await Notification.create({
+                        sender: profile.user._id,
+                        recipient: member.userId,
+                        treeId: profile.treeId,
+                        type: "new_member",
+                        message: `Tomorrow marks ${years} years since ${profile.user.firstname} passed away. Let us remember them with love.`,
+                        referenceId: profile.user._id
+                    });
+                }
+                
+                console.log(`Death anniversary reminder sent for ${profile.user.firstname}`);
+            }
+        }
+    } catch (error) {
+        console.error("Error in checkAndSendDeathAnniversaryReminders:", error);
+    }
+};
+
+// Send event participation confirmation requests (3 days before event)
+const checkAndSendEventParticipationConfirmations = async () => {
+    try {
+        console.log("Checking event participation confirmations...");
+        const today = new Date();
+        const confirmationDate = new Date(today);
+        confirmationDate.setDate(today.getDate() + 3); // Target: 3 days from now
+        
+        const targetDateString = confirmationDate.toISOString().split('T')[0];
+        
+        const events = await Events.find({ startDate: targetDateString });
+        
+        for (const event of events) {
+            if (!event.guests || event.guests.length === 0) continue;
+            
+            const guestsToConfirm = event.guests.filter(g =>
+                g.user && g.status === 'pending'
+            );
+            
+            for (const guest of guestsToConfirm) {
+                // Create participation confirmation request notification
+                await Notification.create({
+                    sender: event.createdBy,
+                    recipient: guest.user,
+                    treeId: event.treeId,
+                    type: "event",
+                    message: `Please confirm your participation for "${event.eventName}" happening in 3 days. Tap to respond.`,
+                    referenceId: event._id,
+                });
+            }
+            
+            if (guestsToConfirm.length > 0) {
+                console.log(`Participation confirmation sent for event "${event.eventName}" to ${guestsToConfirm.length} guests`);
+            }
+        }
+    } catch (error) {
+        console.error("Error in checkAndSendEventParticipationConfirmations:", error);
     }
 };

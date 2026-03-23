@@ -74,6 +74,10 @@ export const transformFormData = (data) => {
     }
   });
 
+  // Remove lifeHistoryDocuments from form updates - managed via separate API
+  // Documents are uploaded/removed via /profile/upload-document and /profile/remove-document
+  delete transformed.lifeHistoryDocuments;
+
   // Remove empty strings for enum fields to prevent validation errors
   const enumFields = ['prefix', 'marital_status', 'jobCategory', 'gender', 'bloodGroup', 'foodPreference', 'jobStatus', 'jobType', 'religion', 'occupation', 'department', 'designation'];
   enumFields.forEach(field => {
@@ -98,9 +102,9 @@ export const validateRequiredFields = (data, hasFile) => {
   }
 
   // Validate profilePicture - either file upload or URL string
-  if (!hasFile && (!profilePicture || profilePicture.trim() === '')) {
-    errors.push("profilePicture is required (either upload a file or provide a URL)");
-  }
+  // if (!hasFile && (!profilePicture || profilePicture.trim() === '')) {
+  //   errors.push("profilePicture is required (either upload a file or provide a URL)");
+  // }
 
   // Validate age
   if (!age || age === '' || isNaN(age) || age < 0 || age > 120) {

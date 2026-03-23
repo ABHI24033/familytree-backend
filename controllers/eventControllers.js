@@ -278,8 +278,11 @@ export const createEvent = async (req, res) => {
           year: 'numeric'
         }) : 'TBD';
         const eventLocationFormatted = location || 'TBD';
-        const adminName = User ? `${User.firstname} ${User.lastname || ''}`.trim() : 'Host';
+        // const adminName = User ? `${User.firstname} ${User.lastname || ''}`.trim() : 'Host';
 
+        const adminName = creator
+          ? `${creator.firstname} ${creator.lastname || ''}`.trim()
+          : 'Host';
         const eventDataPayload = {
           eventName: eventName,
           eventDate: eventDateFormatted,

@@ -3,9 +3,34 @@ import Post from "../models/Post.js";
 import Poll from "../models/Poll.js";
 import Profile from "../models/Profile.js";
 import User from "../models/User.js";
-import { uploadImageToCloudinary, deleteImageFromCloudinary, extractPublicIdFromUrl } from "../utils/cloudinaryUpload.js";
+import { uploadImageToCloudinary, deleteImageFromCloudinary, extractPublicIdFromUrl, uploadPDFToCloudinary, deleteRawFileFromCloudinary } from "../utils/cloudinaryUpload.js";
 import { getUserId, handleValidationError, transformFormData, validateRequiredFields, populateFamilyRelations, validateUpdateFields } from "../utils/common.js";
 import { sendWelcomeEmail } from "../utils/emailService.js";
+
+// Helper function to process uploaded PDF files
+const processUploadedPDFs = async (req, existingDocs = []) => {
+  const uploadedDocs = [...existingDocs];
+  
+  if (req.files && req.files.lifeHistoryDocuments && req.files.lifeHistoryDocuments.length > 0) {
+    // Check total limit
+    if (existingDocs.length + req.files.lifeHistoryDocuments.length > 3) {
+      throw new Error(`Cannot upload ${req.files.lifeHistoryDocuments.length} files. Maximum 3 documents allowed.`);
+    }
+    
+    // Upload each PDF to Cloudinary
+    for (const file of req.files.lifeHistoryDocuments) {
+      const uploadResult = await uploadPDFToCloudinary(file.buffer, file.originalname);
+      uploadedDocs.push({
+        name: uploadResult.name,
+        url: uploadResult.url,
+        publicId: uploadResult.public_id,
+        uploadedAt: new Date()
+      });
+    }
+  }
+  
+  return uploadedDocs;
+};
 
 // Create a new profile for the authenticated user
 export const createProfile = async (req, res, next) => {
@@ -23,11 +48,11 @@ export const createProfile = async (req, res, next) => {
       });
     }
 
-    // Handle file upload if present
+    // Handle profile picture upload if present
     let profilePictureUrl = null;
-    if (req.file) {
+    if (req.files && req.files.profilePicture && req.files.profilePicture[0]) {
       try {
-        const uploadResult = await uploadImageToCloudinary(req.file.buffer);
+        const uploadResult = await uploadImageToCloudinary(req.files.profilePicture[0].buffer);
         profilePictureUrl = uploadResult.url;
       } catch (uploadError) {
         return res.status(500).json({
@@ -52,11 +77,19 @@ export const createProfile = async (req, res, next) => {
       profileData.treeId = userId; // Tree ID is the Root User ID
     }
 
+    // Process PDF uploads
+    try {
+      profileData.lifeHistoryDocuments = await processUploadedPDFs(req, []);
+    } catch (pdfError) {
+      return res.status(400).json({
+        message: "PDF upload failed",
+        error: pdfError.message
+      });
+    }
+
     // Validate required fields
-    const validationErrors = validateRequiredFields(profileData, !!req.file);
+    const validationErrors = validateRequiredFields(profileData, !!(req.files && req.files.profilePicture));
     if (validationErrors.length > 0) {
-      // If we uploaded an image but validation failed, we should clean it up
-      // However, Cloudinary cleanup can be handled by their auto-cleanup policies
       return res.status(400).json({
         message: "Validation failed",
         errors: validationErrors
@@ -69,7 +102,6 @@ export const createProfile = async (req, res, next) => {
 
     // Send welcome email if email is provided
     if (req.body.email) {
-      // Send asynchronously
       sendWelcomeEmail(req.body.email, profileData.firstname || 'User').catch(err => {
         console.error('Failed to send welcome email:', err);
       });
@@ -144,13 +176,13 @@ export const updateProfile = async (req, res, next) => {
       });
     }
 
-    // Handle file upload if present
+    // Handle profile picture upload if present
     let profilePictureUrl = null;
     let oldProfilePictureUrl = existingProfile.profilePicture;
 
-    if (req.file) {
+    if (req.files && req.files.profilePicture && req.files.profilePicture[0]) {
       try {
-        const uploadResult = await uploadImageToCloudinary(req.file.buffer);
+        const uploadResult = await uploadImageToCloudinary(req.files.profilePicture[0].buffer);
         profilePictureUrl = uploadResult.url;
       } catch (uploadError) {
         return res.status(500).json({
@@ -184,8 +216,18 @@ export const updateProfile = async (req, res, next) => {
       updates.profilePicture = profilePictureUrl;
     }
 
+    // Process PDF uploads - merge with existing docs
+    try {
+      updates.lifeHistoryDocuments = await processUploadedPDFs(req, existingProfile.lifeHistoryDocuments || []);
+    } catch (pdfError) {
+      return res.status(400).json({
+        message: "PDF upload failed",
+        error: pdfError.message
+      });
+    }
+
     // Validate fields being updated
-    const validationErrors = validateUpdateFields(updates, !!req.file);
+    const validationErrors = validateUpdateFields(updates, !!(req.files && req.files.profilePicture));
     if (validationErrors.length > 0) {
       return res.status(400).json({
         message: "Validation failed",
@@ -285,13 +327,13 @@ export const updateUserProfileById = async (req, res, next) => {
       });
     }
 
-    // Handle file upload if present
+    // Handle profile picture upload if present
     let profilePictureUrl = null;
     let oldProfilePictureUrl = existingProfile.profilePicture;
 
-    if (req.file) {
+    if (req.files && req.files.profilePicture && req.files.profilePicture[0]) {
       try {
-        const uploadResult = await uploadImageToCloudinary(req.file.buffer);
+        const uploadResult = await uploadImageToCloudinary(req.files.profilePicture[0].buffer);
         profilePictureUrl = uploadResult.url;
       } catch (uploadError) {
         return res.status(500).json({
@@ -325,8 +367,18 @@ export const updateUserProfileById = async (req, res, next) => {
       updates.profilePicture = profilePictureUrl;
     }
 
+    // Process PDF uploads - merge with existing docs
+    try {
+      updates.lifeHistoryDocuments = await processUploadedPDFs(req, existingProfile.lifeHistoryDocuments || []);
+    } catch (pdfError) {
+      return res.status(400).json({
+        message: "PDF upload failed",
+        error: pdfError.message
+      });
+    }
+
     // Validate fields being updated
-    const validationErrors = validateUpdateFields(updates, !!req.file);
+    const validationErrors = validateUpdateFields(updates, !!(req.files && req.files.profilePicture));
     if (validationErrors.length > 0) {
       return res.status(400).json({
         message: "Validation failed",
@@ -756,6 +808,127 @@ export const getUpcomingBirthdaysAndAnniversaries = async (req, res, next) => {
       deathAnniversaries
     });
   } catch (err) {
+    next(err);
+  }
+};
+
+// Upload life history document (max 3 files)
+export const uploadLifeHistoryDocument = async (req, res, next) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    let profile = await Profile.findOne({ user: userId });
+    
+    // If profile doesn't exist, create a minimal stub profile
+    if (!profile) {
+      // Get user info for the profile
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Create minimal profile with just required fields
+      profile = await Profile.create({
+        user: userId,
+        treeId: userId, // Default treeId to user's own ID
+        firstname: user.firstname || "",
+        lastname: user.lastname || "",
+        gender: "other", // Default value
+        isCompleted: false, // Mark as incomplete since this is just for document upload
+        lifeHistoryDocuments: []
+      });
+      
+      console.log(`Created minimal profile for user ${userId} during document upload`);
+    }
+
+    // Check if max limit (3) reached
+    const currentDocs = profile.lifeHistoryDocuments || [];
+    if (currentDocs.length >= 3) {
+      return res.status(400).json({
+        message: "Maximum limit reached",
+        error: "You can only upload up to 3 life history documents"
+      });
+    }
+
+    // Upload PDF to Cloudinary
+    if (!req.file) {
+      return res.status(400).json({ message: "No file provided" });
+    }
+
+    const uploadResult = await uploadPDFToCloudinary(
+      req.file.buffer,
+      req.file.originalname
+    );
+
+    // Add document to profile
+    const newDocument = {
+      name: uploadResult.name,
+      url: uploadResult.url,
+      publicId: uploadResult.public_id,
+      uploadedAt: new Date()
+    };
+
+    profile.lifeHistoryDocuments.push(newDocument);
+    await profile.save();
+
+    return res.status(201).json({
+      success: true,
+      message: "Document uploaded successfully",
+      data: newDocument
+    });
+  } catch (err) {
+    console.error("Error uploading document:", err);
+    next(err);
+  }
+};
+
+// Remove life history document
+export const removeLifeHistoryDocument = async (req, res, next) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const { documentId } = req.params;
+    if (!documentId) {
+      return res.status(400).json({ message: "Document ID required" });
+    }
+
+    const profile = await Profile.findOne({ user: userId });
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+
+    // Find document by its _id (stored as string in array)
+    const docIndex = profile.lifeHistoryDocuments.findIndex(
+      doc => doc._id.toString() === documentId
+    );
+
+    if (docIndex === -1) {
+      return res.status(404).json({ message: "Document not found" });
+    }
+
+    const document = profile.lifeHistoryDocuments[docIndex];
+
+    // Delete from Cloudinary
+    if (document.publicId) {
+      await deleteRawFileFromCloudinary(document.publicId);
+    }
+
+    // Remove from array
+    profile.lifeHistoryDocuments.splice(docIndex, 1);
+    await profile.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Document removed successfully"
+    });
+  } catch (err) {
+    console.error("Error removing document:", err);
     next(err);
   }
 };

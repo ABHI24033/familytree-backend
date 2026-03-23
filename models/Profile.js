@@ -156,6 +156,14 @@ const profileSchema = new Schema(
 
     lifeHistory: { type: String, maxlength: 500 },
 
+    // LIFE HISTORY DOCUMENTS (Max 3 PDF files)
+    lifeHistoryDocuments: [{
+      name: { type: String, required: true },
+      url: { type: String, required: true },
+      publicId: { type: String, required: true },
+      uploadedAt: { type: Date, default: Date.now }
+    }],
+
     // DEATH & BURIAL
     burialPlace: { type: String, trim: true },
 
@@ -208,6 +216,14 @@ profileSchema.index({ partner: 1 });
 profileSchema.pre("save", function (next) {
   if (this.dob && !this.yearOfBirth) {
     this.yearOfBirth = this.dob.getFullYear();
+  }
+  next();
+});
+
+// ---- Pre-validate: burialPlace required if dateOfDeath is set ----
+profileSchema.pre("validate", function (next) {
+  if (this.dateOfDeath && !this.burialPlace) {
+    this.invalidate("burialPlace", "Burial place is required when date of death is provided");
   }
   next();
 });
